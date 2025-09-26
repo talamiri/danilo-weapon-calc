@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>DANYEL - FiveM Weapon Calculator</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;margin:20px;background:#f3f4f6;color:#111;direction:rtl}
+    .container{max-width:1000px;margin:0 auto;padding:18px;background:#fff;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.06)}
+    h1{font-size:22px;margin-bottom:6px}
+    p.lead{color:#555;margin-top:0}
+    .grid{display:grid;grid-template-columns:1fr 380px;gap:16px}
+    .card{background:#fafafa;padding:12px;border-radius:8px;border:1px solid #eee}
+    .weapon{border:1px solid #e6e6e6;padding:8px;border-radius:8px;margin-bottom:8px}
+    label{display:block;font-size:12px;color:#333;margin-bottom:6px}
+    input[type="number"], input[type="text"], textarea, select{width:100%;padding:8px;border-radius:6px;border:1px solid #ddd;font-size:14px}
+    .row{display:flex;gap:8px;align-items:center}
+    .row .small{width:110px}
+    button{cursor:pointer;padding:8px 10px;border-radius:7px;border:0}
+    .btn-primary{background:#1f7aed;color:#fff}
+    .btn-ghost{background:#eee}
+    .totals{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+    .material{padding:8px;border-radius:6px;border:1px solid #e6e6e6;background:#fff}
+    .muted{color:#666;font-size:13px}
+    @media (max-width:900px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>DANYEL - מחשבון נשקים</h1>
+    <p class="lead">בחר כמות ליד כל נשק — החומרים יוכפלו אוטומטית לפי הכמות שתבחר עבור כל נשק.</p>
+
+    <div class="grid">
+      <div>
+        <div class="card">
+          <h3>נשקים</h3>
+          <div id="weapons-list"></div>
+
+          <div style="margin-top:8px" class="row">
+            <button id="reset-qty" class="btn-ghost">אפס כמויות</button>
+            <button id="export-csv" class="btn-primary">ייצא CSV</button>
+            <button id="copy-json" class="btn-ghost">העתק JSON</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <h3>ייבוא שמות - הדבק שורות (כל שורה = נשק)</h3>
+          <textarea id="import-text" rows="3"></textarea>
+          <div style="margin-top:8px" class="row">
+            <button id="import-names" class="btn-primary">ייבא שמות</button>
+            <button id="clear-weapons" class="btn-ghost">נקה רשימת נשקים</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h3>מלאי וחישובים</h3>
+          <p class="muted">הזן מלאי קיים כדי לחשב כמה ניתן לייצר מכל נשק. השדות מתעדכנים בזמן אמת.</p>
+
+          <div id="materials-stock"></div>
+          <div style="margin-top:8px" class="row">
+            <input id="mat-name" placeholder="שם חומר" />
+            <input id="mat-amt" type="number" placeholder="כמות" />
+            <button id="add-material" class="btn-primary">הוסף מלאי</button>
+          </div>
+
+          <hr style="margin:10px 0" />
+
+          <h4>סה"כ חומרים דרושים</h4>
+          <div id="totals" class="totals" style="margin-top:8px"></div>
+
+          <hr style="margin:10px 0" />
+          <h4>כמות שניתן לייצר לפי מלאי</h4>
+          <div id="produce-list"></div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <h3>הוראות הפעלה</h3>
+          <ol style="padding-left:18px;">
+            <li>שמור את הקובץ הזה כ־<code>index.html</code>.</li>
+            <li>פתח את הקובץ בדפדפן (גרור או "Open file").</li>
+            <li>שנה כמות ליד כל נשק — החומרים יתעדכנו אוטומטית.</li>
+          </ol>
+          <div class="muted">עבודה מקומית בלבד — אין שרת. אם תרצה אשדרג לפריסה ב־Vercel/Netlify.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const weapons = [
+      { id:1, name:'Scar (Special carbine)', recipe:[['spring',11],['gears',7],['red dot',1],['high-quality metal',12],['magazine',1],['rifle body',1],['special carbine card',1]], qty:0 },
+      { id:2, name:'Mac-10', recipe:[['spring',7],['gears',6],['red dot',1],['high-quality metal',1],['magazine',1],['rifle body',1],['Mac-10 card',1]], qty:0 },
+      { id:3, name:'Deagle', recipe:[['spring',5],['gears',3],['red dot',1],['high-quality metal',8],['magazine',1],['rifle body',1],['deagle card',1]], qty:0 },
+      { id:4, name:'Hk (heavy rifle)', recipe:[['spring',8],['gears',10],['red dot',1],['high-quality metal',9],['magazine',1],['rifle body',1],['heavy rifle Card',1]], qty:0 },
+      { id:5, name:'AK47 rifle', recipe:[['spring',13],['gears',8],['red dot',1],['high-quality metal',12],['magazine',1],['rifle body',1],['Ak47 rifle Card',1]], qty:0 },
+      { id:6, name:'SMG-9', recipe:[['spring',8],['gears',5],['red dot',1],['high-quality metal',8],['magazine',1],['rifle body',1],['mp9 Card',1]], qty:0 },
+      { id:7, name:'Bullpup rifle', recipe:[['spring',9],['gears',8],['red dot',1],['high-quality metal',9],['magazine',1],['rifle body',1],['Bullpup Card',1]], qty:0 },
+      { id:8, name:'Micro UZI', recipe:[['spring',7],['gears',5],['red dot',1],['high-quality metal',7],['magazine',1],['rifle body',1],['UZI Card',1]], qty:0 },
+      { id:9, name:'Smg-5', recipe:[['spring',8],['gears',6],['red dot',1],['high-quality metal',9],['magazine',1],['rifle body',1],['SMG Card',1]], qty:0 },
+      { id:10, name:'tec-9 (machine Pistol)', recipe:[['spring',5],['gears',4],['red dot',1],['high-quality metal',9],['magazine',1],['rifle body',1],['tec-9 Card',1]], qty:0 },
+      { id:11, name:'pistol glock', recipe:[['spring',3],['gears',2],['high-quality metal',4],['magazine',1],['rifle body',1],['Glock Card',1]], qty:0 },
+      { id:12, name:'Phoenix pistol (fnx)', recipe:[['spring',6],['gears',4],['high-quality metal',7],['magazine',1],['rifle body',1],['Phoenix Card',1]], qty:0 }
+    ];
+
+    let materialsStock = {};
+
+    const weaponsListEl = document.getElementById('weapons-list');
+    const totalsEl = document.getElementById('totals');
+    const produceListEl = document.getElementById('produce-list');
+    const materialsStockEl = document.getElementById('materials-stock');
+
+    function renderWeapons(){
+      weaponsListEl.innerHTML = '';
+      weapons.forEach(w => {
+        const div = document.createElement('div'); div.className = 'weapon';
+        const title = document.createElement('div'); title.style.display='flex'; title.style.justifyContent='space-between';
+        const name = document.createElement('div'); name.textContent = w.name; name.style.fontWeight='600';
+        const qtyWrap = document.createElement('div'); qtyWrap.style.display='flex'; qtyWrap.style.gap='6px'; qtyWrap.style.alignItems='center';
+        const label = document.createElement('div'); label.textContent='כמות:'; label.className='muted';
+        const input = document.createElement('input'); input.type='number'; input.min=0; input.value = w.qty; input.style.width='80px';
+        input.addEventListener('input', e => { w.qty = Number(e.target.value) || 0; updateAll(); });
+        qtyWrap.appendChild(label); qtyWrap.appendChild(input);
+        title.appendChild(name); title.appendChild(qtyWrap);
+        div.appendChild(title);
+
+        const recipeTitle = document.createElement('div'); recipeTitle.className='muted'; recipeTitle.style.marginTop='8px'; recipeTitle.textContent = 'מתכון:';
+        div.appendChild(recipeTitle);
+        const list = document.createElement('div'); list.style.marginTop='6px';
+        w.recipe.forEach(r => {
+          const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.fontSize='14px'; row.style.marginBottom='4px';
+          row.innerHTML = '<div>'+r[0]+'</div><div>'+r[1]+' ×</div>';
+          list.appendChild(row);
+        });
+        div.appendChild(list);
+        weaponsListEl.appendChild(div);
+      });
+    }
+
+    function calcTotals(){
+      const totals = {};
+      weapons.forEach(w => {
+        const qty = Number(w.qty) || 0;
+        w.recipe.forEach(r => {
+          const mat = r[0];
+          const need = Number(r[1] || 0) * qty;
+          totals[mat] = (totals[mat] || 0) + need;
+        });
+      });
+      return totals;
+    }
+
+    function renderTotals(){
+      const totals = calcTotals();
+      totalsEl.innerHTML = '';
+      const keys = Object.keys(totals);
+      if(!keys.length){ totalsEl.innerHTML = '<div class="muted">ריק — בחר כמויות כדי לראות את סך החומרים</div>'; return; }
+      keys.forEach(mat => {
+        const amt = totals[mat];
+        const box = document.createElement('div'); box.className='material';
+        box.innerHTML = '<div style="font-weight:600">'+mat+'</div><div class="muted">נדרש: '+amt+'</div>';
+        totalsEl.appendChild(box);
+      });
+    }
+
+    function renderProduceList(){
+      produceListEl.innerHTML = '';
+      weapons.forEach(w => {
+        if(!Object.keys(materialsStock).length){
+          const div = document.createElement('div'); div.className='material'; div.style.marginBottom='6px';
+          div.innerHTML = '<div style="font-weight:600">'+w.name+'</div><div class="muted">מתכון: '+w.recipe.map(r=>r[0]+" ×"+r[1]).join(', ')+'</div><div style="font-weight:700;margin-top:6px">לא מוגבל (לא הוזן מלאי)</div>';
+          produceListEl.appendChild(div);
+          return;
+        }
+        let max = Infinity;
+        w.recipe.forEach(r => {
+          const needPer = Number(r[1]) || 0;
+          const avail = Number(materialsStock[r[0]]||0);
+          if(needPer === 0) return;
+          const possible = Math.floor(avail / needPer);
+          if(possible < max) max = possible;
+        });
+        if(!isFinite(max)) max = 0;
+        const div = document.createElement('div'); div.className='material'; div.style.marginBottom='6px';
+        div.innerHTML = '<div style="font-weight:600">'+w.name+'</div><div class="muted">מתכון: '+w.recipe.map(r=>r[0]+" ×"+r[1]).join(', ')+'</div><div style="font-weight:700;margin-top:6px">ניתן לייצר: '+max+'</div>';
+        produceListEl.appendChild(div);
+      });
+    }
+
+    function renderMaterialsStock(){
+      materialsStockEl.innerHTML = '';
+      const keys = Object.keys(materialsStock);
+      if(!keys.length) materialsStockEl.innerHTML = '<div class="muted">אין מלאי מוזן</div>';
+      keys.forEach(mat => {
+        const row = document.createElement('div'); row.className='row'; row.style.marginBottom='6px';
+        const name = document.createElement('div'); name.textContent = mat; name.style.flex='1'; name.style.fontWeight='600';
+        const input = document.createElement('input'); input.type='number'; input.value = materialsStock[mat]; input.style.width='120px';
+        input.addEventListener('input', e => { materialsStock[mat] = Number(e.target.value)||0; updateAll(); });
+        const btn = document.createElement('button'); btn.className='btn-ghost'; btn.textContent='הסר'; btn.addEventListener('click', ()=>{ delete materialsStock[mat]; updateAll(); });
+        row.appendChild(name); row.appendChild(input); row.appendChild(btn);
+        materialsStockEl.appendChild(row);
+      });
+    }
+
+    function updateAll(){
+      renderTotals();
+      renderProduceList();
+      renderMaterialsStock();
+    }
+
+    renderWeapons(); updateAll();
+
+    document.getElementById('add-material').addEventListener('click', ()=>{
+      const name = document.getElementById('mat-name').value.trim();
+      const amt = Number(document.getElementById('mat-amt').value)||0;
+      if(!name) return alert('הזן שם חומר');
+      materialsStock[name] = (materialsStock[name]||0) + amt;
+      document.getElementById('mat-name').value=''; document.getElementById('mat-amt').value='';
+      updateAll();
+    });
+
+    document.getElementById('reset-qty').addEventListener('click', ()=>{
+      weapons.forEach(w=>w.qty=0); renderWeapons(); updateAll();
+    });
+
+    document.getElementById('export-csv').addEventListener('click', ()=>{
+      const rows = ['Weapon,Qty,Material,AmountNeeded'];
+      weapons.forEach(w=>{
+        const qty = Number(w.qty)||0;
+        w.recipe.forEach(r=>{
+          rows.push('"'+w.name+'",'+qty+',"'+r[0]+'",'+(r[1]*qty));
+        });
+      });
+      const csv = rows.join('\n');
+      const blob = new Blob([csv],{type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'weapons_totals.csv'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('copy-json').addEventListener('click', ()=>{
+      const j = JSON.stringify(weapons, null, 2);
+      navigator.clipboard && navigator.clipboard.writeText(j);
+      alert('JSON הועתק ללוח');
+    });
+
+    document.getElementById('import-names').addEventListener('click', ()=>{
+      const text = document.getElementById('import-text').value.trim();
+      if(!text) return;
+      const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+      lines.forEach(name=>{
+        weapons.push({ id: Date.now()+Math.random(), name, recipe:[['spring',5]], qty:0 });
+      });
+      document.getElementById('import-text').value=''; renderWeapons(); updateAll();
+    });
+
+    document.getElementById('clear-weapons').addEventListener('click', ()=>{
+      if(!confirm('בטוח לנקות את כל הנשקים?')) return;
+      weapons.length = 0; renderWeapons(); updateAll();
+    });
+
+  </script>
+</body>
+</html>
